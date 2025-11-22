@@ -36,7 +36,7 @@ export async function requireAuth(req, res, next) {
 }
 
 export function requireOnboarded(req, res, next) {
-    if (!req.user.username) {
+    if (!req.user.userName) {
         throw new AppError(401, "You haven't onboarded yet!");
     }
 
@@ -44,7 +44,7 @@ export function requireOnboarded(req, res, next) {
 }
 
 export function requireNotOnboarded(req, res, next) {
-    if (req.user.username) {
+    if (req.user.userName) {
         throw new AppError(404, "You have already onboarded!");
     }
 
