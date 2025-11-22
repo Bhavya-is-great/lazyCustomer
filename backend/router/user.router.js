@@ -1,9 +1,27 @@
-import {Router} from 'express';
-import { registerUser, verifyUser } from '../controllers/user.controller.js';
+import { Router } from "express";
+const router = Router();
 
+import {
+    sendToken,
+    verifyToken,
+    onboardUser,
+    logoutUser,
+} from "../controllers/user.controller.js";
+import {
+    requireAuth,
+    requireNotOnboarded,
+} from "../middlewares/auth.middleware.js";
+import wrapAsync from "../utils/wrapAsync.js";
 
-const userRouter = Router();
+router.post("/send-token", wrapAsync(sendToken));
+router.post("/verify/:token", wrapAsync(verifyToken));
+router.post(
+    "/onboard",
+    requireAuth,
+    requireNotOnboarded,
+    wrapAsync(onboardUser)
+);
 
-userRouter.post('/register', registerUser)
-userRouter.get('/verify/:token', verifyUser);
-export default userRouter;
+router.post("/logout", wrapAsync(logoutUser));
+
+export default router;

@@ -1,46 +1,106 @@
-import jwt from 'jsonwebtoken';
-import User from '../models/user.model.js';
-import sendEmail from '../utils/sendEmail.js';
-import cookie from 'cookie-parser';
+import User from "../models/user.model.js";
+import { createHash } from "crypto";
 
+import { generateLoginToken, generateAndSetJWT } from "../utils/tokens.util.js";
+import sendEmail from "../utils/sendEmail.js";
+import AppError from "../utils/AppError.js";
+import { sanitizeUser } from "../utils/sanitize.js";
 
-const registerUser = async (req, res) => {
-    try {
-        console.log(req.body);
-        const { userName, email } = req.body;
-        console.log(userName, email);
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message: 'User already exists' });
-        }
-        const newUser = new User({ userName, email });
-        const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '10m' });
-        const link = `${process.env.BACKEND_URL}/api/v1/user/verify/${token}`;
-        sendEmail(email, link);
-        await newUser.save();
-        res.status(201).json({ message: 'User registered successfully' });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server error' });
+export const sendToken = async (req, res) => {
+    const { userName, email } = req.body;
+
+    const existingUser = await User.findOne({ email });
+
+    const { hash, token } = generateLoginToken();
+
+    const link = `${process.env.BACKEND_URL}/api/v1/user/verify/${token}`;
+    await sendEmail(email, link);
+
+    if (existingUser) {
+        existingUser.loginToken = hash;
+        existingUser.loginTokenExpiresAt = new Date(
+            Date.now() + 15 * 60 * 1000
+        ); // 15 mins
+        await existingUser.save();
+
+        return res.status(201).json({
+            success: true,
+            message: "A login link has been sent to your email address.",
+        });
     }
+
+    const newUser = new User({
+        email,
+        loginToken: hash,
+        loginTokenExpiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15 mins
+    });
+    await newUser.save();
+
+    return res.status(201).json({
+        success: true,
+        message:
+            "Registration successful! A login link has been sent to your email address.",
+    });
 };
 
+export const verifyToken = async (req, res) => {
+    const { token } = req.params;
+    const hash = createHash("sha256").update(token).digest("hex");
 
-const verifyUser = async (req, res) => {
-    try {
-        const { token } = req.params;   
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        const user = await User.findById(decoded.id);
-        if (!user) {
-            return res.status(400).json({ message: 'Invalid token' });
-        }
-        const jwtToken = jwt.sign({...user}, process.env.JWT_SECRET, {expiresIn:'7d'})
-        res.cookie('token', jwtToken)
-        res.status(200).json({ message: 'User verified successfully' });
-    } catch (error) {
-        console.log(error)
-        res.status(500).json({ message: 'Server error' });
+    const user = await User.findOne({
+        loginToken: hash,
+        loginTokenExpiresAt: { $gt: new Date() },
+    });
+
+    if (!user) {
+        throw new AppError(400, "Invalid or expired token");
     }
+
+    user.loginToken = undefined;
+    user.loginTokenExpiresAt = undefined;
+    await user.save();
+
+    generateAndSetJWT(res, user);
+
+    return res.status(200).json({
+        success: true,
+        message: "User logged in successfully.",
+        data: {
+            user: sanitizeUser(user),
+        },
+    });
 };
 
-export { registerUser, verifyUser };
+export const onboardUser = async (req, res) => {
+    const { userName } = req.body;
+    const email = req.user.email;
+
+    const updatedUser = await User.findOneAndUpdate(
+        { email },
+        { userName },
+        { new: true }
+    );
+
+    if (!updatedUser) {
+        throw new AppError(404, "User not found");
+    }
+
+    generateAndSetJWT(res, updatedUser);
+
+    return res.status(200).json({
+        success: true,
+        message: "User onboarded successfully!",
+        data: {
+            user: sanitizeUser(updatedUser),
+        },
+    });
+};
+
+export const logoutUser = async (req, res) => {
+    res.clearCookie("lazy-customer-token");
+
+    return res.status(200).json({
+        success: true,
+        message: "User logged out succesfully.",
+    });
+};

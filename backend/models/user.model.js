@@ -1,22 +1,27 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
+import { hash, compare } from "bcrypt";
 
 const userSchema = mongoose.Schema({
-    userName:{
-        required:true,
-        type:String,
-        minlength:3,
-        maxlength:30,
+    userName: {
+        type: String,
+        minlength: 3,
+        maxlength: 30,
     },
-    email:{
-        type:String,
-        required:true,
-        unique:true,
+    email: {
+        type: String,
+        required: true,
+        unique: true,
+        index: true,
     },
-    role:{
-        type:String,
-        enum:['customer', 'seller', 'deliveryPatner'],
-        default:'customer'
-    }
-})
-const User = mongoose.model('User', userSchema);
+    role: {
+        type: String,
+        enum: ["customer", "seller", "deliveryPartner", "admin"],
+        default: "customer",
+    },
+
+    loginToken: String,
+    loginTokenExpiresAt: Date,
+});
+
+const User = mongoose.model("User", userSchema);
 export default User;
