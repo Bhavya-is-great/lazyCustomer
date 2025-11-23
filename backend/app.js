@@ -43,7 +43,6 @@ app.all("*splat", (req, res, next) => {
 });
 
 import appErrorHandler from "./utils/appErrorHandler.js";
-import { get } from "mongoose";
 app.use(appErrorHandler);
 
 const PORT = process.env.PORT || 5000;

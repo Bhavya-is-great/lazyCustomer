@@ -2,6 +2,7 @@ import { Router } from "express";
 const router = Router();
 
 import {
+    checkUser,
     sendToken,
     verifyToken,
     onboardUser,
@@ -13,6 +14,7 @@ import {
 } from "../middlewares/auth.middleware.js";
 import wrapAsync from "../utils/wrapAsync.js";
 
+router.get("/status", wrapAsync(checkUser));
 router.post("/send-token", wrapAsync(sendToken));
 router.post("/verify/:token", wrapAsync(verifyToken));
 router.post(

@@ -6,6 +6,31 @@ import sendEmail from "../utils/sendEmail.js";
 import AppError from "../utils/AppError.js";
 import { sanitizeUser } from "../utils/sanitize.js";
 
+export const checkUser = async (req, res) => {
+    if (!req.user) {
+        return res.status(200).json({
+            success: true,
+            authenticated: false,
+            message: "User is not logged in.",
+            data: null,
+        });
+    }
+
+    return res.status(200).json({
+        success: true,
+        authenticated: true,
+        message: "User is logged in.",
+        data: {
+            user: {
+                _id: req.user._id,
+                userName: req.user.userName,
+                email: req.user.email,
+                role: req.user.role,
+            },
+        },
+    });
+};
+
 export const sendToken = async (req, res) => {
     const { userName, email } = req.body;
 
