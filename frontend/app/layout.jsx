@@ -1,5 +1,7 @@
 import { Geist, Geist_Mono } from "next/font/google";
+import BarbaController from "@/utils/BarbaController";
 import "./globals.css";
+import Loader from "@/components/globals/Loader";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,10 +19,17 @@ export const metadata = {
 };
 
 export default function RootLayout({ children }) {
+
+  const uiSecret = process.env.UI_PROTECTION_KEY ?? "dev-key";
+
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
-        {children}
+      <body>
+        <BarbaController />
+        <Loader secretKey={uiSecret} />
+        <div id="barba-wrapper" data-barba="wrapper">
+          {children}
+        </div>
       </body>
     </html>
   );

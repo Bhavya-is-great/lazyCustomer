@@ -1,42 +1,117 @@
+@import url('https://fonts.googleapis.com/css2?family=Concert+One&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:ital,opsz,wght@0,6..12,200..1000;1,6..12,200..1000&display=swap');
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand */
+  --lc-primary: hsl(24, 100%, 55%);
+  --lc-primary-dark: hsl(24, 100%, 42%);
+  --lc-primary-light: hsl(30, 100%, 71%);
+
+  /* Accent */
+  --lc-accent: hsl(171, 100%, 37%);
+
+  /* Background + Surfaces */
+  --lc-surface: hsl(24, 100%, 97%);
+  --lc-surface-2: hsl(22, 100%, 95%);
+
+  /* Text */
+  --lc-text: hsl(0, 0%, 12%);
+  --lc-muted: hsl(0, 0%, 42%);
+
+  /* Border */
+  --lc-border: hsl(24, 22%, 89%);
+
+  /* Alerts */
+  --lc-warning: hsl(39, 100%, 56%);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root[data-theme="yellow"] {
+  /* Brand */
+  --lc-primary: hsl(48, 100%, 55%);        /* bright yellow */
+  --lc-primary-dark: hsl(48, 100%, 42%);
+  --lc-primary-light: hsl(48, 100%, 75%);
+
+  /* Accent */
+  --lc-accent: hsl(171, 100%, 37%);
+
+  /* Background + Surfaces */
+  --lc-surface: hsl(48, 100%, 96%);
+  --lc-surface-2: hsl(48, 100%, 92%);
+
+  /* Text */
+  --lc-text: hsl(0, 0%, 12%);
+  --lc-muted: hsl(0, 0%, 45%);
+
+  /* Border */
+  --lc-border: hsl(48, 25%, 85%);
+
+  /* Alerts */
+  --lc-warning: hsl(39, 100%, 56%);
 }
 
-html,
-body {
-  max-width: 100vw;
-  overflow-x: hidden;
+:root[data-theme="red"] {
+  /* Brand */
+  --lc-primary: hsl(0, 85%, 55%);        /* main red */
+  --lc-primary-dark: hsl(0, 85%, 42%);
+  --lc-primary-light: hsl(0, 85%, 70%);
+
+  /* Accent */
+  --lc-accent: hsl(171, 100%, 37%);
+
+  /* Background + Surfaces */
+  --lc-surface: hsl(0, 100%, 97%);
+  --lc-surface-2: hsl(0, 100%, 94%);
+
+  /* Text */
+  --lc-text: hsl(0, 0%, 12%);
+  --lc-muted: hsl(0, 0%, 45%);
+
+  /* Border */
+  --lc-border: hsl(0, 20%, 85%);
+
+  /* Alerts */
+  --lc-warning: hsl(39, 100%, 56%);
 }
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+:root[data-theme="green"] {
+  /* Brand */
+  --lc-primary: hsl(142, 70%, 45%);      /* fresh green */
+  --lc-primary-dark: hsl(142, 70%, 35%);
+  --lc-primary-light: hsl(142, 70%, 70%);
+
+  /* Accent */
+  --lc-accent: hsl(22, 100%, 55%);       /* warm orange accent */
+
+  /* Background + Surfaces */
+  --lc-surface: hsl(142, 50%, 96%);
+  --lc-surface-2: hsl(142, 50%, 92%);
+
+  /* Text */
+  --lc-text: hsl(0, 0%, 12%);
+  --lc-muted: hsl(0, 0%, 45%);
+
+  /* Border */
+  --lc-border: hsl(142, 20%, 85%);
+
+  /* Alerts */
+  --lc-warning: hsl(39, 100%, 56%);
 }
 
 * {
-  box-sizing: border-box;
-  padding: 0;
   margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
+html {
+  font-size: clamp(14px, 1vw, 18px);
+  /* font-family: "Concert One", sans-serif;
+  font-weight: 100; */
+  font-family: "Nunito Sans", sans-serif;
+  font-optical-sizing: auto;
+  font-weight: 300;
+  font-style: normal;
+  font-variation-settings:
+    "wdth" 100,
+    "YTLC" 500;
 
-@media (prefers-color-scheme: dark) {
-  html {
-    color-scheme: dark;
-  }
 }

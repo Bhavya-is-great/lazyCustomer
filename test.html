@@ -1,0 +1,322 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Morph to your uploaded SVG — GSAP + flubber</title>
+  <style>
+    body { display:flex; height:100vh; margin:0; align-items:center; justify-content:center; background:#fff; }
+    .wrap { width:480px; height:480px; position:relative; }
+    svg { width:100%; height:100%; display:block; }
+    #morph { fill:#000; transform-origin:50% 50%; }
+    button { position: absolute; top:14px; right:14px; padding:8px 12px; border-radius:8px; border:none; cursor:pointer; background:#111827; color:#fff; }
+    #info { position:absolute; left:14px; top:14px; font-size:13px; color:#333; }
+  </style>
+</head>
+<body>
+  <div class="wrap" id="app">
+    <div id="info">Loading target SVG…</div>
+    <svg id="stage" viewBox="0 0 384 384" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+      <!-- initial circle path (we'll morph this) -->
+      <path id="morph" d="" />
+    </svg>
+    <button id="go" disabled>Morph</button>
+  </div>
+
+  <!-- libs -->
+  <script src="https://unpkg.com/gsap@3/dist/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/flubber/0.4.2/flubber.min.js" integrity="sha512-Pbv92BXbUUHMtpQ/Pccy7JbRlOl1Pw/jG++oW5aujMHDyroUB0xK8La2aRIViwybCSpx7YlHgojmjk5xUE0IOw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+  <script>
+    // === CHANGE THIS if your environment exposes the local file under a different URL.
+    // The path from your session: "/mnt/data/Untitled design.svg"
+    const svgUrl = "/mnt/data/Untitled design.svg";
+
+    const infoEl = document.getElementById('info');
+    const goBtn = document.getElementById('go');
+    const morphEl = document.getElementById('morph');
+    const stage = document.getElementById('stage');
+
+    // starting circle path (centered in 384x384)
+    const circlePath = "M352,192 A160,160 0 1,0 32,192 A160,160 0 1,0 352,192";
+    morphEl.setAttribute('d', circlePath);
+
+    // helpers to convert simple shapes into path strings
+    function circleToPath(cx, cy, r) {
+      return `M ${cx + r} ${cy} A ${r} ${r} 0 1 0 ${cx - r} ${cy} A ${r} ${r} 0 1 0 ${cx + r} ${cy} Z`;
+    }
+    function ellipseToPath(cx, cy, rx, ry) {
+      return `M ${cx + rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx - rx} ${cy} A ${rx} ${ry} 0 1 0 ${cx + rx} ${cy} Z`;
+    }
+    function rectToPath(x, y, w, h, rx=0, ry=0) {
+      if (rx && ry) {
+        // rounded rect -> approximate using arc corners
+        return `M${x+rx},${y} h${w - rx*2} a${rx},${ry} 0 0 1 ${rx},${ry} v${h - ry*2} a${rx},${ry} 0 0 1 ${-rx},${ry} h${- (w - rx*2)} a${rx},${ry} 0 0 1 ${-rx},${-ry} v${- (h - ry*2)} a${rx},${ry} 0 0 1 ${rx},${-ry} Z`;
+      } else {
+        return `M${x},${y} H${x+w} V${y+h} H${x} Z`;
+      }
+    }
+    function polygonToPath(pointsAttr) {
+      // pointsAttr: "x1,y1 x2,y2 ..." or with commas
+      return "M" + pointsAttr.trim().replace(/\s+/g,' ').replace(/ /g,' L ') + " Z";
+    }
+
+    // fetch and parse the user's SVG file
+    async function loadTargetSvg(url) {
+      infoEl.textContent = 'Fetching target SVG…';
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        infoEl.textContent = 'Parsing SVG…';
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, "image/svg+xml");
+        const svg = doc.querySelector('svg');
+
+        if (!svg) {
+          throw new Error('No <svg> element found in file.');
+        }
+
+        // Try to find the best candidate path:
+        // 1) any <path>
+        // 2) otherwise convert the first simple shape (circle, ellipse, rect, polygon, polyline)
+        // 3) otherwise fail (likely raster/masked)
+        let candidate;
+
+        // get first visible path (prefer one with non-empty d)
+        const paths = svg.querySelectorAll('path[d]');
+        if (paths.length) {
+          // pick the longest path (heuristic)
+          let longest = null, maxLen = 0;
+          // to measure length we need to temporarily insert into an offscreen svg in DOM
+          const tmpSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+          tmpSvg.setAttribute('xmlns', "http://www.w3.org/2000/svg");
+          tmpSvg.style.position = 'absolute';
+          tmpSvg.style.left = '-9999px';
+          document.body.appendChild(tmpSvg);
+
+          paths.forEach(p => {
+            const clone = p.cloneNode(true);
+            tmpSvg.appendChild(clone);
+            try {
+              const len = clone.getTotalLength ? clone.getTotalLength() : 0;
+              if (len > maxLen) { maxLen = len; longest = clone; }
+            } catch(e){}
+            tmpSvg.removeChild(clone);
+          });
+          document.body.removeChild(tmpSvg);
+
+          if (longest) candidate = { type: 'path', d: longest.getAttribute('d') };
+        }
+
+        if (!candidate) {
+          // circles
+          const c = svg.querySelector('circle');
+          if (c) {
+            const cx = parseFloat(c.getAttribute('cx')||0);
+            const cy = parseFloat(c.getAttribute('cy')||0);
+            const r = parseFloat(c.getAttribute('r')||0);
+            candidate = { type:'path', d: circleToPath(cx, cy, r) };
+          }
+        }
+        if (!candidate) {
+          const e = svg.querySelector('ellipse');
+          if (e) {
+            candidate = { type:'path', d: ellipseToPath(
+              parseFloat(e.getAttribute('cx')||0),
+              parseFloat(e.getAttribute('cy')||0),
+              parseFloat(e.getAttribute('rx')||0),
+              parseFloat(e.getAttribute('ry')||0)
+            )};
+          }
+        }
+        if (!candidate) {
+          const r = svg.querySelector('rect');
+          if (r) {
+            candidate = { type:'path', d: rectToPath(
+              parseFloat(r.getAttribute('x')||0),
+              parseFloat(r.getAttribute('y')||0),
+              parseFloat(r.getAttribute('width')||0),
+              parseFloat(r.getAttribute('height')||0),
+              parseFloat(r.getAttribute('rx')||0),
+              parseFloat(r.getAttribute('ry')||0)
+            )};
+          }
+        }
+        if (!candidate) {
+          const poly = svg.querySelector('polygon, polyline');
+          if (poly) {
+            const pts = poly.getAttribute('points');
+            candidate = { type:'path', d: polygonToPath(pts) };
+          }
+        }
+
+        if (!candidate) {
+          throw new Error('No vector path-like elements found. Your SVG might be a raster image or use masks. Try exporting a vector silhouette/path from your design tool.');
+        }
+
+        infoEl.textContent = 'Found target vector path — normalizing and preparing morph…';
+        return { svgElement: svg, pathD: candidate.d };
+      } catch (err) {
+        console.error(err);
+        infoEl.textContent = 'Error: ' + err.message;
+        throw err;
+      }
+    }
+
+    // Normalize target path to stage dimensions (384x384) by computing bbox and scaling if possible.
+    // This attempts a best-effort normalization so morph looks correct.
+    function normalizePathToBox(pathD, targetBoxSize = 384) {
+      // create temporary svg/path to measure bbox
+      const tmpSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      tmpSvg.setAttribute('xmlns', "http://www.w3.org/2000/svg");
+      tmpSvg.style.position = 'absolute';
+      tmpSvg.style.left = '-9999px';
+      document.body.appendChild(tmpSvg);
+
+      const tmpPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      tmpPath.setAttribute('d', pathD);
+      tmpSvg.appendChild(tmpPath);
+
+      let bbox;
+      try {
+        bbox = tmpPath.getBBox();
+      } catch (e) {
+        // fallback: give up normalization
+        document.body.removeChild(tmpSvg);
+        return pathD;
+      }
+
+      // if bbox is empty or zero area, skip
+      if (bbox.width === 0 || bbox.height === 0) {
+        document.body.removeChild(tmpSvg);
+        return pathD;
+      }
+
+      // compute scale to fit into targetBoxSize with padding
+      const padding = 12; // px
+      const available = targetBoxSize - padding*2;
+      const scale = Math.min(available / bbox.width, available / bbox.height);
+
+      // compute translate to center after scaling
+      const tx = (targetBoxSize - (bbox.width * scale)) / 2 - (bbox.x * scale);
+      const ty = (targetBoxSize - (bbox.height * scale)) / 2 - (bbox.y * scale);
+
+      // apply transform by creating an SVG <g> and serializing transformed path coordinates via path.getPointAtLength sampling.
+      // Simpler approach: sample N points along original path and recreate a smooth path using those points.
+      const length = tmpPath.getTotalLength();
+      const samples = Math.max(60, Math.ceil(length / 6)); // adaptive sampling
+      const pts = [];
+      for (let i = 0; i <= samples; i++) {
+        const p = tmpPath.getPointAtLength((i / samples) * length);
+        const x = p.x * scale + tx;
+        const y = p.y * scale + ty;
+        pts.push([x, y]);
+      }
+
+      // build a smooth path using cubic bezier approximated by simple polyline -> convert to smooth cubic via small method:
+      // We'll create a single closed polygonal path (works well with flubber interpolation).
+      const newPath = "M " + pts.map(p => p.join(" ")).join(" L ") + " Z";
+
+      document.body.removeChild(tmpSvg);
+      return newPath;
+    }
+
+    async function init() {
+      // check flubber
+      if (typeof flubber === 'undefined') {
+        infoEl.textContent = 'flubber library failed to load.';
+        alert('flubber is not available. Check network or CDN.');
+        return;
+      }
+
+      try {
+        const target = await loadTargetSvg(svgUrl);
+        // convert/normalize target path to our stage (384x384)
+        const normalized = normalizePathToBox(target.pathD, 384);
+
+        // debug logs
+        console.log("Original target d (first 200 chars):", target.pathD && target.pathD.slice(0,200));
+        console.log("Normalized target d (first 200 chars):", normalized && normalized.slice(0,200));
+
+        infoEl.textContent = 'Ready — click Morph';
+
+        // enable button and attach morph logic
+        goBtn.disabled = false;
+
+        // prepare interpolator variable
+        let anim, interpolator;
+        let toggled = false;
+
+        function createInterpolators(startD, endD) {
+          try {
+            interpolator = flubber.interpolate(startD, endD, { maxSegmentLength: 6 });
+          } catch (err) {
+            console.error('flubber.interpolate error:', err);
+            interpolator = null;
+          }
+        }
+
+        // create once
+        createInterpolators(circlePath, normalized);
+
+        goBtn.addEventListener('click', () => {
+          if (!toggled) {
+            // morph to target
+            if (!interpolator) createInterpolators(circlePath, normalized);
+            if (!interpolator) {
+              alert('Failed to create interpolator. See console.');
+              return;
+            }
+            if (anim) anim.kill();
+            const obj = { t: 0 };
+            anim = gsap.to(obj, {
+              t: 1,
+              duration: 1.4,
+              ease: "power2.inOut",
+              onUpdate() {
+                morphEl.setAttribute('d', interpolator(obj.t));
+              },
+              onComplete() {
+                gsap.fromTo(morphEl, { scale: 1 }, { scale: 1.02, duration: 0.22, yoyo: true, repeat: 1, transformOrigin: "50% 50%" });
+              }
+            });
+            // bounce effect
+            gsap.fromTo('#morph', { y: -36, scale: 0.92 }, { y: 0, scale: 1, duration: 0.9, ease: "bounce.out", delay: 0.02 });
+            goBtn.textContent = 'Revert';
+          } else {
+            // morph back
+            try {
+              const backIt = flubber.interpolate(normalized, circlePath, { maxSegmentLength: 6 });
+              if (anim) anim.kill();
+              const obj = { t: 0 };
+              anim = gsap.to(obj, {
+                t: 1,
+                duration: 1.0,
+                ease: "power2.inOut",
+                onUpdate() {
+                  morphEl.setAttribute('d', backIt(obj.t));
+                }
+              });
+              gsap.fromTo('#morph', { scale:1.02 }, { scale:1, duration:0.5, ease:"power2.out" });
+              goBtn.textContent = 'Morph';
+            } catch (err) {
+              console.error('back interpolate error', err);
+              alert('Cannot morph back. See console.');
+            }
+          }
+          toggled = !toggled;
+        });
+
+        // small repeated bounce at start (few seconds)
+        gsap.to('#morph', { y: -16, repeat: 6, yoyo: true, duration: 0.22, ease: "power1.inOut" });
+
+      } catch (err) {
+        console.error('init error:', err);
+      }
+    }
+
+    // run
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>
